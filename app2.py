@@ -1,122 +1,104 @@
-import streamlit as st
-import pandas as pd
+import time
+import random
 
-st.set_page_config(page_title="ローカル対戦：0.8倍サバイバル", page_icon="⚖️")
+def start_game():
+    print("--- げぇむ『てんびん』を開始します ---")
+    print("ルール: 0〜100の中から数字を選んでください。")
+    print("勝者: 全員の平均値に『0.8』を掛けた値に最も近い人。")
+    print("脱落: ポイントが -10 になると『秤』から水が溢れ、敗北となります。\n")
 
-# --- セッション状態の初期化 ---
-if 'game_active' not in st.session_state:
-    st.session_state.update({
-        'game_active': False,
-        'players': [],
-        'round': 1,
-        'submitted_count': 0,
-        'current_inputs': {}, # {名前: 数値}
-        'history': []
-    })
-
-# --- ゲーム管理関数 ---
-def start_game(names):
-    st.session_state.players = [{"name": name.strip(), "points": 0} for name in names if name.strip()]
-    st.session_state.game_active = True
-    st.session_state.round = 1
-    st.session_state.current_inputs = {}
-    st.session_state.submitted_count = 0
-
-# --- メインUI ---
-st.title("⚖️ 0.8倍狙い！ローカル対戦")
-
-if not st.session_state.game_active:
-    st.subheader("プレイヤー登録")
-    player_names = st.text_area("参加者の名前を改行して入力してください", "プレイヤー1\nプレイヤー2\nプレイヤー3")
-    if st.button("ゲーム開始"):
-        start_game(player_names.split('\n'))
-        st.rerun()
-
-else:
-    # サイドバー：現在のスコア
-    st.sidebar.header("現在のスコア")
-    for p in st.session_state.players:
-        st.sidebar.write(f"{p['name']}: {p['points']} pt")
-    if st.sidebar.button("タイトルに戻る"):
-        st.session_state.game_active = False
-        st.rerun()
-
-    st.subheader(f"第 {st.session_state.round} ラウンド")
+    # 初期設定
+    user_name = input("あなたの名前を入力してください: ")
+    bot_names = ["Bot_チシヤ", "Bot_クズリュウ", "Bot_アン"]
     
-    # 順番に入力
-    current_player_idx = st.session_state.submitted_count
-    
-    if current_player_idx < len(st.session_state.players):
-        current_player = st.session_state.players[current_player_idx]["name"]
+    # プレイヤーの初期化（名前: ポイント）
+    players = {user_name: 0}
+    for name in bot_names:
+        players[name] = 0
+
+    round_count = 1
+
+    while len(players) > 1:
+        print(f"\n========================")
+        print(f"      第 {round_count} 回戦")
+        print(f"========================")
         
-        with st.form(key=f"input_form_{current_player_idx}"):
-            st.write(f"👉 **{current_player}** さんの番です")
-            # 秘密の入力（type="password"で数字を隠す）
-            val = st.number_input("自分の数字を入力 (0.0 - 100.0)", 0.0, 100.0, step=0.1, key=f"in_{current_player}")
-            st.caption("※入力中、他の人は画面を見ないでください！")
+        # 現在のポイント表示
+        print("[現在のポイント]")
+        for name, pt in players.items():
+            print(f" {name}: {pt}pt")
+        print("------------------------")
+
+        choices = {}
+
+        # ユーザーの入力
+        while True:
+            try:
+                val = float(input(f"[{user_name}] 0〜100の数字を入力: "))
+                if 0 <= val <= 100:
+                    choices[user_name] = val
+                    break
+                print("範囲外です。0から100の間で入力してください。")
+            except ValueError:
+                print("有効な数字を入力してください。")
+
+        # Botの入力 (戦略的思考: 平均は徐々に下がっていく傾向をシミュレート)
+        for name in list(players.keys()):
+            if name == user_name: continue
             
-            if st.form_submit_button("数値を確定して次の人へ"):
-                st.session_state.current_inputs[current_player] = val
-                st.session_state.submitted_count += 1
-                st.rerun()
-    else:
-        # --- 全員の入力完了後の結果計算 ---
-        st.success("全員の入力が完了しました！")
-        if st.button("結果を見る"):
-            results = st.session_state.current_inputs
-            vals = list(results.values())
-            avg = sum(vals) / len(vals)
-            target = avg * 0.8
-            
-            # 勝者判定
-            # 重複チェック
-            counts = {v: vals.count(v) for v in set(vals)}
-            
-            summary = []
-            valid_players = []
-            for name, val in results.items():
-                p_ref = next(p for p in st.session_state.players if p["name"] == name)
-                if counts[val] > 1:
-                    p_ref["points"] -= 2
-                    summary.append({"名前": name, "数値": val, "判定": "❌ 被り(-2pt)"})
-                else:
-                    valid_players.append({"name": name, "val": val, "player": p_ref})
-            
-            winner_name = "なし"
-            if valid_players:
-                # 0と100の特殊ルール
-                has_zero = any(d["val"] == 0 for d in valid_players)
-                has_hundred = any(d["val"] == 100 for d in valid_players)
-                
-                if has_zero and has_hundred:
-                    winner_data = random.choice([d for d in valid_players if d["val"] == 100])
-                elif has_zero:
-                    winner_data = random.choice([d for d in valid_players if d["val"] == 0])
-                else:
-                    winner_data = min(valid_players, key=lambda x: abs(x["val"] - target))
-                
-                winner_name = winner_data["name"]
-                for d in valid_players:
-                    if d["name"] == winner_name:
-                        summary.append({"名前": d["name"], "数値": d["val"], "判定": "🏆 勝利！"})
-                    else:
-                        d["player"]["points"] -= 1
-                        summary.append({"名前": d["name"], "数値": d["val"], "判定": "敗北(-1pt)"})
-            
-            # 結果表示
-            st.divider()
-            st.info(f"平均: {avg:.2f}  →  **ターゲット(×0.8): {target:.2f}**")
-            st.table(pd.DataFrame(summary))
-            
-            if any(p["points"] <= -5 for p in st.session_state.players):
-                st.error("🏁 誰かのポイントが-5に達したため、ゲーム終了です！")
-                if st.button("もう一度遊ぶ"):
-                    st.session_state.game_active = False
-                    st.rerun()
+            # 回が進むごとに低い数字を狙う戦略
+            if round_count == 1:
+                choices[name] = random.uniform(0, 100 * 0.8)
             else:
-                if st.button("次のラウンドへ"):
-                    st.session_state.round += 1
-                    st.session_state.submitted_count = 0
-                    st.session_state.current_inputs = {}
-                    st.rerun()
-      
+                # 前回の平均より少し下を狙う
+                choices[name] = random.uniform(0, 50) 
+            
+            print(f"[{name}] が数字を決定しました。")
+
+        # 計算フェーズ
+        total_val = sum(choices.values())
+        average = total_val / len(choices)
+        target = average * 0.8
+        
+        print(f"\n集計中...")
+        time.sleep(1.5)
+        print(f"平均値: {average:.2f}")
+        print(f"設定数値 (平均×0.8): {target:.2f}")
+        print("------------------------")
+
+        # 勝者の判定（ターゲットに最も近い人）
+        # 各プレイヤーのターゲットとの差を計算
+        diffs = {name: abs(val - target) for name, val in choices.items()}
+        winner = min(diffs, key=diffs.get)
+
+        # 結果表示とポイント減算
+        print(f"各プレイヤーの選択: { {k: round(v, 2) for k, v in choices.items()} }")
+        print(f"\n勝者: {winner}！ (差: {diffs[winner]:.2f})")
+
+        # 勝者以外は-1ポイント
+        for name in list(players.keys()):
+            if name != winner:
+                players[name] -= 1
+
+        # 脱落判定
+        losers = [name for name, pt in players.items() if pt <= -10]
+        for loser in losers:
+            print(f"\n※※※ 警告 ※※※")
+            print(f"{loser} の秤から水が溢れました。脱落です。")
+            del players[loser]
+
+        if user_name not in players:
+            print("\n--- GAME OVER ---")
+            print("あなたは死にました。")
+            break
+
+        if len(players) == 1 and user_name in players:
+            print(f"\n★★★ CONGRATULATIONS ★★★")
+            print(f"おめでとうございます、{user_name}。あなたは生き残りました。")
+            break
+
+        round_count += 1
+        time.sleep(1)
+
+if __name__ == "__main__":
+    start_game()
