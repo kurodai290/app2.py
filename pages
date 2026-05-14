@@ -1,0 +1,5 @@
+your-repository/
+├── app2.py                 (メインページ：ロビー)
+└── pages/                  (必ず「pages」というフォルダ名にする)
+    ├── 1_🎰_Slot.py        (スロットページ)
+    └── 2_🎡_Roulette.py    (ルーレットページ)
